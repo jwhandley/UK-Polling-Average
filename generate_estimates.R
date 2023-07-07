@@ -80,4 +80,4 @@ house_effects %>%
        y = "House effect",
        fill = "Party",
        title = "House effects by pollster in the UK, 2020-present")
-ggsave("house_effects.png",width=8,height=5)
+ggsave("house_effects.png",width=12,height=9)
