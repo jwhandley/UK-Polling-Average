@@ -1,18 +1,23 @@
 library(tidyverse)
 library(cmdstanr)
 
+# Load pollbase data
 pollbase <- read_csv("pollbase.csv")
 
+# Pivot to long format
 data <- pollbase %>%
   as_tibble() %>%
   pivot_longer(cols = c(con,lab,lib,grn,ref), names_to = "party", values_to = "vote") %>%
   filter(!is.na(vote))
 
+# Create integer time values for use in Stan
+# Using weeks as the default time step to compromise between timeliness and computational cost
 data$t <- interval(min(data$date), data$date) %/% weeks(1) + 1
-max_t <- interval(min(data$date), as.Date("2024-12-31")) %/% weeks(1) + 1
 
+# Compile model
 model <- cmdstan_model("polling_average.stan")
 
+# Data for Stan
 data_list <- list(
   T = max(data$t),
   K = length(unique(data$pollster)),
@@ -22,9 +27,10 @@ data_list <- list(
   j = as_factor(data$party) %>% as.numeric(),
   t = data$t,
   vi = data$vote,
-  vote0 = c(43.6, 32.1, 11.6, 2.6, 2)
+  vote0 = c(43.6, 32.1, 11.6, 2.6, 2) # Taken from GE2019 results
 )
 
+# Fit model
 fit <- model$sample(
   data = data_list,
   chains = 4,
@@ -33,14 +39,16 @@ fit <- model$sample(
   iter_sampling = 500
 )
 
+# Extract estimates vote shares and 95% CIs
 fit$draws("vote", format = "matrix") %>%
   apply(2, quantile, probs = c(0.025, 0.5, 0.975)) %>%
   t() -> vote
 
+# Plot vote shares
 tibble(party = rep(c("con","lab","lib","grn","ref"),max(data$t)),
        t = rep(1:max(data$t), each = 5)) %>%
   mutate(party = factor(party, levels = c("con","lab","lib","grn","ref")),
-         date = months(t-1) + min(data$date)) %>%
+         date = weeks(t-1) + min(data$date)) %>%
   bind_cols(vote) %>%
   ggplot(aes(x = date, group = party)) +
   geom_line(aes(y = `50%`, color = party)) +
@@ -58,7 +66,7 @@ tibble(party = rep(c("con","lab","lib","grn","ref"),max(data$t)),
        caption = "@jwhandley17")
 ggsave("polling_average.png",width=8,height=5)
 
-
+# Extract pollster house effects
 fit$draws("mu", format = "matrix") %>% t() -> mu
 house_effects <- expand_grid(pollster = levels(as_factor(data$pollster)),
                              party = levels(as_factor(data$party))) %>%
@@ -67,6 +75,7 @@ house_effects <- expand_grid(pollster = levels(as_factor(data$pollster)),
   bind_cols(mu) %>%
   pivot_longer(cols = c(everything(),-pollster,-party), names_to = "draw_number", values_to = "draw")
 
+# Plot house effects
 house_effects %>%
   mutate(party = fct_rev(party)) %>%
   ggplot(aes(x = party, fill = party)) +
