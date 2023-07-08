@@ -9,14 +9,16 @@ data <- pollbase %>%
   as_tibble() %>%
   pivot_longer(cols = c(con,lab,lib,grn,ref), names_to = "party", values_to = "vote") %>%
   filter(!is.na(vote)) %>%
-  mutate(pollster = ifelse(pollster == "Opinium" & date <= as.Date("2022-02-12"), "Opinium-Old","Opinium-New"))
+  mutate(pollster = case_when(pollster == "Opinium" & date <= as.Date("2022-02-12") ~ "Opinium-Old",
+                              pollster == "Opinium" & date >= as.Date("2022-02-12") ~ "Opinium-New",
+                              TRUE ~ pollster))
 
 # Create integer time values for use in Stan
 # Using weeks as the default time step to compromise between timeliness and computational cost
 data$t <- interval(as.Date("2019-12-12"), data$date) %/% weeks(1) + 1
 
 # Compile model
-model <- cmdstan_model("polling_average.stan")
+model <- cmdstan_model("polling_average_multivariate.stan")
 
 # Data for Stan
 data_list <- list(
@@ -36,8 +38,8 @@ fit <- model$sample(
   data = data_list,
   chains = 4,
   parallel_chains = 4,
-  iter_warmup = 500,
-  iter_sampling = 500
+  iter_warmup = 1000,
+  iter_sampling = 2000
 )
 
 # Extract estimates vote shares and 95% CIs
