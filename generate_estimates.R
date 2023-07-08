@@ -8,11 +8,12 @@ pollbase <- read_csv("pollbase.csv")
 data <- pollbase %>%
   as_tibble() %>%
   pivot_longer(cols = c(con,lab,lib,grn,ref), names_to = "party", values_to = "vote") %>%
-  filter(!is.na(vote))
+  filter(!is.na(vote)) %>%
+  mutate(pollster = ifelse(pollster == "Opinium" & date <= as.Date("2022-02-12"), "Opinium-Old","Opinium-New"))
 
 # Create integer time values for use in Stan
 # Using weeks as the default time step to compromise between timeliness and computational cost
-data$t <- interval(min(data$date), data$date) %/% weeks(1) + 1
+data$t <- interval(as.Date("2019-12-12"), data$date) %/% weeks(1) + 1
 
 # Compile model
 model <- cmdstan_model("polling_average.stan")
@@ -48,7 +49,7 @@ fit$draws("vote", format = "matrix") %>%
 tibble(party = rep(c("con","lab","lib","grn","ref"),max(data$t)),
        t = rep(1:max(data$t), each = 5)) %>%
   mutate(party = factor(party, levels = c("con","lab","lib","grn","ref")),
-         date = weeks(t-1) + min(data$date)) %>%
+         date = weeks(t-1) + as.Date("2019-12-12")) %>%
   bind_cols(vote) %>%
   ggplot(aes(x = date, group = party)) +
   geom_line(aes(y = `50%`, color = party)) +
