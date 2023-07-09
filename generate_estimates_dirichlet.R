@@ -1,6 +1,5 @@
 library(tidyverse)
 library(cmdstanr)
-library(britpol)
 
 pollbase <- read_csv("pollbase.csv")
 
@@ -105,9 +104,8 @@ fit$draws("vote", format = "matrix") %>%
                 t = 1:max(data$t))
   ) %>%
   mutate(date = as.Date("2019-12-12") + weeks(t)) %>%
-  left_join(data_long) %>%
   ggplot(aes(x = date)) +
-  geom_jitter(aes(y = vote, color = party), alpha = 0.2, width = 0.5, height = 0) +
+  geom_jitter(data = data_long, aes(y = vote, color = party), alpha = 0.2, width = 0.5, height = 0) +
   geom_line(aes(y = `50%`, color = party)) +
   geom_ribbon(aes(ymin = `2.5%`, ymax = `97.5%`, fill = party), alpha = 0.3) +
   scale_color_manual(values = c("#2c88df","#d90f32","#f3a600","#3aa859","black"),
